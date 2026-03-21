@@ -80,6 +80,7 @@ def get_all_songs_cache(config):
     song_cache = {}
     offset = 0
     PAGE_SIZE = 500
+    print('Getting all tracks')
     while True:
         album_list_res = send_api_request(
             config['navidrome_url'], config['navidrome_user'], config['navidrome_password'], 
@@ -124,16 +125,60 @@ def download_all_playlists(config):
             except IOError: continue
     return success_count, total_count, ""
 
-def parse_m3u(file_path):
+def parse_m3u(file_path,file_regex=None):
     tracks = []
     try:
+        print('Reading m3u lines')
         with open(file_path, 'r', encoding='utf-8') as f: lines = f.readlines()
-    except Exception: return []
+    except Exception as ex:
+        print(f"Error reading M3U file: {ex}")
+        return []
+    
+    if file_regex is None:
+        file_regex = re.compile(
+            r'^/?(?P<artist>[^:^]+?)\s*\^\s*'
+            r'(?P<album>[^:^]+?)\s*\^\s*'
+            r'(?P<year>\d{4})\s*\^\s*'
+            r'(?P<title>[^:^]+?)'              # title always required
+            r'(?:\s*\^\s*(?P<extra>[^.]+))?'   # extra optional: ^ extra
+            r'(?:\.[^.]+)?$'                   # optional extension
+        )
+    
+    slash_re = re.compile(
+            r'^/?(?P<artist>[^/]+?)/'
+            r'(?P<album>[^/]+?)/'
+            r'(?:(?P<tracknum>\d+)\s*[-_\s]+)?'  # optional tracknum
+            r'(?P<title>[^/.]+)'                 # title
+            r'(?:\.[^.]+)?$'                     # extension
+    )  
+
+    
     for line in lines:
         line = line.strip()
+        print(line)
         if not line or line.startswith('#EXTM3U'): continue
         normalized_line = line.replace('\\', '/')
-        parts = normalized_line.split('/')
+        parts = normalized_line.split('/-')
+        m = file_regex.match(normalized_line)
+        if m:
+            try:
+                artist = m.group("artist")   # "Some Artist"
+                album = m.group("album")     # "Some Album/-Disc 1"
+                cleaned_title = m.group("title")     # "01 - Track Title.flac"
+                tracks.append({'artist': artist.strip(), 'album': album.strip(), 'title': cleaned_title.strip(), 'path': line})
+                continue
+            except IndexError: continue
+            
+        m = slash_re.match(normalized_line)
+        if m:
+            try:
+                artist = m.group("artist")   # "Some Artist"
+                album = m.group("album")     # "Some Album/-Disc 1"
+                cleaned_title = m.group("title")     # "01 - Track Title.flac"
+                tracks.append({'artist': artist.strip(), 'album': album.strip(), 'title': cleaned_title.strip(), 'path': line})
+                continue
+            except IndexError: continue
+            
         if len(parts) >= 3:
             try:
                 artist, filename = parts[0], parts[-1]
@@ -141,7 +186,9 @@ def parse_m3u(file_path):
                 raw_title = os.path.splitext(filename)[0]
                 cleaned_title = re.sub(r'^\s*\d+\s*[-._]?\s*', '', raw_title)
                 tracks.append({'artist': artist.strip(), 'album': album.strip(), 'title': cleaned_title.strip(), 'path': line})
+                continue
             except IndexError: continue
+    print('Returning %s tracks' % len(tracks))
     return tracks
 
 def merge_playlists(tracks1, tracks2):
@@ -155,6 +202,7 @@ def merge_playlists(tracks1, tracks2):
 
 def search_tracks(config, query, count=50):
     if not query or not all(config.values()): return []
+    print("Searching for tracks \"%s\"" % query)
     res = send_api_request(config['navidrome_url'], config['navidrome_user'], config['navidrome_password'], 'search3', query=query, songCount=count, artistCount=0, albumCount=0)
     if res and res.get('searchResult3', {}).get('song'): 
         songs = res['searchResult3']['song']
@@ -206,6 +254,7 @@ def run_playlist_check(config, local_tracks, song_cache):
     MATCH_THRESHOLD = 75
     SUGGESTION_THRESHOLD = 10
     results = []
+    print('Playlist check start with %s' % len(local_tracks))
     for m3u_track in local_tracks:
         final_match, final_score, status = None, 0, 'missing'
         normalized_path = m3u_track['path'].replace('\\', '/')
@@ -244,5 +293,7 @@ def run_playlist_check(config, local_tracks, song_cache):
                 final_match, final_score, status = best_std_candidate, highest_std_score, 'suggestion'
             else:
                 status = 'missing'
+        print("Adding result for track: \"%s - %s\" | Status: %s | Score: %s" % (m3u_track['artist'], m3u_track['title'], status, final_score))
         results.append({'original_track': m3u_track, 'navidrome_song': final_match, 'status': status, 'score': final_score})
+    print('Playlist check complete with %s results' % len(results))
     return results

@@ -139,12 +139,19 @@ class PlaylistToolApp(tk.Tk):
         ttk.Button(middle_button_frame, text="Merge >", command=lambda: self.on_merge_click('right')).pack(side=tk.LEFT, padx=2)
         right_button_frame = ttk.Frame(bottom_frame)
         right_button_frame.pack(side=tk.RIGHT)
+        ttk.Button(right_button_frame, text="Save Not OK", command=self.on_save_notok_click).pack(side=tk.LEFT, padx=0)
         ttk.Button(right_button_frame, text="Check", command=self.on_check_click).pack(side=tk.LEFT, padx=0)
         ttk.Button(right_button_frame, text="Check All", command=self.on_check_all_click).pack(side=tk.LEFT, padx=5)
-        ttk.Button(right_button_frame, text="Accept", command=self.on_accept_click).pack(side=tk.LEFT, padx=0)
+        ttk.Button(right_button_frame, text="_Accept", command=self.on_accept_click, underline=0).pack(side=tk.LEFT, padx=0)
+        ttk.Button(right_button_frame, text="_NotAccept", command=self.on_notaccept_click, underline=0).pack(side=tk.LEFT, padx=0)
         ttk.Button(right_button_frame, text="Accept All", command=self.on_accept_all_click).pack(side=tk.LEFT, padx=5)
-        ttk.Button(right_button_frame, text="Save", command=self.on_save_click).pack(side=tk.LEFT, padx=0)
+        ttk.Button(right_button_frame, text="_Save", command=self.on_save_click, underline=0).pack(side=tk.LEFT, padx=0)
         ttk.Button(right_button_frame, text="Save All", command=self.on_save_all_click).pack(side=tk.LEFT, padx=5)
+        
+        self.bind('<Alt-a>', lambda e: self.on_accept_click())
+        self.bind('<Alt-s>', lambda e: self.on_save_click())
+        self.bind('<Alt-n>', lambda e: self.on_notaccept_click())
+        self.bind('<Control-Return>', lambda e: self.on_save_click())  # Bonus: Ctrl+Enter
         
         self._link_listbox_events()
         self.refresh_all_playlists()
@@ -347,6 +354,7 @@ class PlaylistToolApp(tk.Tk):
         if not self._ensure_song_cache_exists(): return
         playlist_name = self.local_playlists_listbox.get(self.local_playlists_listbox.curselection()[0])
         full_path = os.path.join(self.config['local_playlists_path'], playlist_name)
+        print('Getting navidrome tracks')
         local_tracks = navidrome_api.parse_m3u(full_path)
         if not local_tracks:
             messagebox.showinfo("Check", f"'{playlist_name}' is empty or could not be read."); return
@@ -419,7 +427,45 @@ class PlaylistToolApp(tk.Tk):
             self.local_tracks_listbox.delete(selected_index)
             self.local_tracks_listbox.insert(selected_index, display_text)
             self.local_tracks_listbox.itemconfig(selected_index, {'fg': 'blue'})
-            messagebox.showinfo("Suggestion Accepted", f"'{track['title']}' has been accepted.\n\nClick 'Save' to save this change.")
+            print(f"'{track['title']}' has been accepted.\n\nClick 'Save' to save this change.")
+            total_items = self.local_tracks_listbox.size()
+            if selected_index < total_items - 1:
+                self.local_tracks_listbox.selection_clear(0, tk.END)
+                self.local_tracks_listbox.selection_set(selected_index + 1)
+                self.local_tracks_listbox.activate(selected_index + 1)
+                self.local_tracks_listbox.see(selected_index + 1)
+                self.local_tracks_listbox.event_generate("<space>")
+        elif check_item['status'] == 'ok':
+            messagebox.showinfo("Accept", "This track is already OK.")
+        else:
+            messagebox.showwarning("Accept", "This track is marked as missing and has no suggestion to accept.")
+            
+    def on_notaccept_click(self):
+        if not self.local_playlists_listbox.curselection():
+            messagebox.showwarning("Not Accept", "Please select a checked playlist first."); return
+        if not self.local_tracks_listbox.curselection():
+            messagebox.showwarning("Not Accept", "Please select a track from the 'Check Results' list to accept."); return
+        playlist_name = self.local_playlists_listbox.get(self.local_playlists_listbox.curselection()[0])
+        if playlist_name not in self.last_check_results:
+            messagebox.showerror("Not Accept Error", "Please run a 'Check' on this playlist first."); return
+        selected_index = self.local_tracks_listbox.curselection()[0]
+        check_item = self.last_check_results[playlist_name][selected_index]
+        if check_item['status'] in ['suggestion' ]:
+            check_item['status'] = 'missing'
+            check_item['score'] = 0
+            track = check_item['original_track']
+            display_text = f"[MISSING] {track['artist']} - {track['title']}"
+            self.local_tracks_listbox.delete(selected_index)
+            self.local_tracks_listbox.insert(selected_index, display_text)
+            self.local_tracks_listbox.itemconfig(selected_index, {'fg': 'red'})
+            print(f"'{track['title']}' has been ben set missing.\n\nClick 'Save' to save this change.")
+            total_items = self.local_tracks_listbox.size()
+            if selected_index < total_items - 1:
+                self.local_tracks_listbox.selection_clear(0, tk.END)
+                self.local_tracks_listbox.selection_set(selected_index + 1)
+                self.local_tracks_listbox.activate(selected_index + 1)
+                self.local_tracks_listbox.see(selected_index + 1)
+                self.local_tracks_listbox.event_generate("<space>")
         elif check_item['status'] == 'ok':
             messagebox.showinfo("Accept", "This track is already OK.")
         else:
@@ -438,6 +484,32 @@ class PlaylistToolApp(tk.Tk):
         if not tracks_to_write and all(item['status'] != 'ok' for item in results):
              messagebox.showinfo("Save", "No tracks were found or accepted. Nothing to save."); return
              
+        warning_message = (f"This will overwrite the playlist file:\n'{playlist_name}'\n\nIt will contain {len(tracks_to_write)} validated tracks.\nAre you sure?")
+        if not messagebox.askyesno("Confirm Save", warning_message): return
+        
+        output_path = os.path.join(self.config['local_playlists_path'], playlist_name)
+        success, error = self._write_m3u_file(output_path, tracks_to_write)
+        if success:
+            messagebox.showinfo("Save Complete", f"Successfully overwrote '{playlist_name}'.")
+            self.on_check_click(show_summary=False)
+        else:
+            messagebox.showerror("File Error", f"Could not write to file.\n\nError: {error}")
+            
+    def on_save_notok_click(self):
+        if not self.local_playlists_listbox.curselection():
+            messagebox.showwarning("Save", "Please select a local playlist that has been checked."); return
+        playlist_name = self.local_playlists_listbox.get(self.local_playlists_listbox.curselection()[0])
+        if playlist_name not in self.last_check_results:
+            messagebox.showerror("Save Error", "Please run a 'Check' on this playlist first."); return
+        
+        results = self.last_check_results[playlist_name]
+        tracks_to_write = [item['navidrome_song'] for item in results if item['status'] not in ['ok', 'found']]
+        
+        if not tracks_to_write and all(item['status'] != 'ok' for item in results):
+             messagebox.showinfo("Save", "No tracks were found or accepted. Nothing to save."); return
+             
+        playlist_name = playlist_name = "_NOTOK.m3u"
+        
         warning_message = (f"This will overwrite the playlist file:\n'{playlist_name}'\n\nIt will contain {len(tracks_to_write)} validated tracks.\nAre you sure?")
         if not messagebox.askyesno("Confirm Save", warning_message): return
         
