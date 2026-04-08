@@ -16,12 +16,13 @@ Ever tried to import an old M3U playlist into Navidrome, only to find half the t
         *   `[MISSING]` (Red): No suitable match could be found.
 
 *   **Interactive Editing & Repair:**
-    *   **Accept Suggestions:** Quickly approve machine suggestions with `Accept` and `Accept All` buttons.
+    *   **Accept Suggestions:** Quickly approve machine suggestions with `Accept` and `Accept All` buttons. (Alt-A for Accept, ALT-N for not accept)
     *   **Manual Search & Replace:** Use the integrated search bar to manually find and replace missing tracks.
     *   **Toggle Confidence:** `Shift+Click` a track to toggle its status between `[FOUND]` and `[SUGGESTION]`.
 
 *   **Powerful Playlist Management:**
     *   **Sync & Upload:** Two-way synchronization with your Navidrome server. `Sync from Server` to download all playlists, and `Upload Selected` to send a fixed playlist back.
+    *   **CSV Import:** Import Playlists from https://www.chosic.com/spotify-playlist-exporter/ as CSV to match against your Navidrome library.   As long as the CSV file has a headers it will try to match column names.
     *   **Merge Playlists:** Combine a local playlist and a cached Navidrome playlist in three different ways.
     *   **Bulk Processing:** `Check All` and `Save All` to process your entire playlist collection in one go.
     *   **File Management:** Add, Delete, and Clear playlists in both the local and cache directories directly from the UI.
@@ -62,6 +63,7 @@ Ever tried to import an old M3U playlist into Navidrome, only to find half the t
     *   The playlist paths will default to `local_playlists` and `navidrome_playlists` subdirectories, but you can change them if you wish.
     *   Click **`Test Connection`** to verify your credentials.
     *   Click **`Save & Close`**.
+    *   CSV column aliases are sotre in the config.json, and can be edited depending on your CSV source.
 
 ## Workflow: How to Use
 

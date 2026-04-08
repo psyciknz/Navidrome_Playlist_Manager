@@ -275,7 +275,8 @@ class PlaylistToolApp(tk.Tk):
     def populate_playlist_listbox(self, listbox, folder_path):
         listbox.delete(0, tk.END)
         try:
-            playlists = [f for f in os.listdir(folder_path) if f.lower().endswith('.m3u')]
+            playlists = [f for f in os.listdir(folder_path) if f.lower().endswith('.m3u') 
+                                                                or f.lower().endswith('.csv')]
             for p in sorted(playlists): listbox.insert(tk.END, p)
         except FileNotFoundError: listbox.insert(tk.END, "Folder not found.")
 
@@ -294,7 +295,11 @@ class PlaylistToolApp(tk.Tk):
             folder, target_listbox, target_frame = self.config['navidrome_playlists_path'], self.navi_tracks_listbox, self.navi_tracks_frame
             self.local_tracks_listbox.delete(0, tk.END)
             self.local_tracks_frame.label.config(text="Tracks (Local)")
-        tracks = navidrome_api.parse_m3u(os.path.join(folder, playlist_name))
+        if playlist_name.lower().endswith('.csv'):
+            tracks = navidrome_api.parse_csv(os.path.join(folder, playlist_name),self.config)
+        else:
+            tracks = navidrome_api.parse_m3u(os.path.join(folder, playlist_name))
+            
         target_listbox.delete(0, tk.END)
         for track in tracks:
             target_listbox.insert(tk.END, f"{track['artist']} - {track['title']}")
@@ -356,7 +361,10 @@ class PlaylistToolApp(tk.Tk):
         playlist_name = self.local_playlists_listbox.get(self.local_playlists_listbox.curselection()[0])
         full_path = os.path.join(self.config['local_playlists_path'], playlist_name)
         print('Getting navidrome tracks')
-        local_tracks = navidrome_api.parse_m3u(full_path)
+        if full_path.lower().endswith('.csv'):
+            local_tracks = navidrome_api.parse_csv(full_path,self.config)
+        else:
+            local_tracks = navidrome_api.parse_m3u(full_path)
         if not local_tracks:
             messagebox.showinfo("Check", f"'{playlist_name}' is empty or could not be read."); return
         self.local_tracks_frame.label.config(text=f"Checking '{playlist_name}'...")

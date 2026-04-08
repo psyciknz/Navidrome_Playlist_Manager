@@ -5,6 +5,7 @@ import requests
 import random
 import string
 import unicodedata
+import csv
 from hashlib import md5
 
 try:
@@ -13,6 +14,12 @@ except ImportError:
     pass
 
 CONFIG_FILE = "config.json"
+
+DEFAULT_ALIASES = {
+    'artist': ['artist', 'artist name', 'band', 'performer'],
+    'album':  ['album', 'album name', 'record'],
+    'title':  ['title', 'song', 'song name', 'track', 'track name'],
+}
 
 # --- All other functions are unchanged and correct ---
 
@@ -29,6 +36,11 @@ def load_config():
     if 'navidrome_password' not in config: config['navidrome_password'] = ""
     if 'local_playlists_path' not in config: config['local_playlists_path'] = default_local_path
     if 'navidrome_playlists_path' not in config: config['navidrome_playlists_path'] = default_navi_path
+    if 'csv_header_mapping' not in config:
+        config['csv_header_mapping'] = DEFAULT_ALIASES
+    else:
+        config['csv_header_mapping'] = {key: value for key, value in config['csv_header_mapping'].items() if key in DEFAULT_ALIASES}
+
     os.makedirs(config['local_playlists_path'], exist_ok=True)
     os.makedirs(config['navidrome_playlists_path'], exist_ok=True)
     return config
@@ -191,6 +203,44 @@ def parse_m3u(file_path,file_regex=None):
     print('Returning %s tracks' % len(tracks))
     return tracks
 
+def normalise_headers(fieldnames,aliases):
+    
+    mapping = {}
+    for canonical, variants in aliases.items():
+        for fieldname in fieldnames:
+            if fieldname.strip().lower() in variants:
+                mapping[fieldname] = canonical
+                break
+    return mapping
+
+def parse_csv(file_path,config):
+    tracks = []
+    try:
+        print('Reading CSV lines')
+        aliases = config.get('csv_header_mapping', DEFAULT_ALIASES)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            header_map = normalise_headers(reader.fieldnames or [],aliases)
+
+            for row in reader:
+                # Remap row keys to canonical names
+                normalised = {header_map[k]: v for k, v in row.items() if k in header_map}
+
+                track = {
+                    'artist': normalised.get('artist', '').strip(),
+                    'album':  normalised.get('album', '').strip(),
+                    'title':  normalised.get('title', '').strip(),
+                }
+                if not track['artist'] or not track['title']:
+                    continue
+                tracks.append(track)
+    except Exception as ex:
+        print(f"Error reading CSV file: {ex}")
+        return []
+
+    print('Returning %s tracks' % len(tracks))
+    return tracks
+
 def merge_playlists(tracks1, tracks2):
     merged = []
     seen_paths = set()
@@ -257,8 +307,12 @@ def run_playlist_check(config, local_tracks, song_cache):
     print('Playlist check start with %s' % len(local_tracks))
     for m3u_track in local_tracks:
         final_match, final_score, status = None, 0, 'missing'
-        normalized_path = m3u_track['path'].replace('\\', '/')
-        cached_match = song_cache.get(normalized_path)
+        if 'path' in m3u_track:
+            normalized_path = m3u_track['path'].replace('\\', '/')
+            cached_match = song_cache.get(normalized_path)
+        else:
+            cached_match = None
+            
         if cached_match:
             final_match, status, final_score = cached_match, 'ok', 100
         else:
