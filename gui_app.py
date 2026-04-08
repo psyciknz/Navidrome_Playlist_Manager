@@ -294,11 +294,12 @@ class PlaylistToolApp(tk.Tk):
             folder, target_listbox, target_frame = self.config['navidrome_playlists_path'], self.navi_tracks_listbox, self.navi_tracks_frame
             self.local_tracks_listbox.delete(0, tk.END)
             self.local_tracks_frame.label.config(text="Tracks (Local)")
-        target_frame.label.config(text=f"Tracks in '{playlist_name}'")
         tracks = navidrome_api.parse_m3u(os.path.join(folder, playlist_name))
         target_listbox.delete(0, tk.END)
         for track in tracks:
             target_listbox.insert(tk.END, f"{track['artist']} - {track['title']}")
+        target_frame.label.config(text=f"Tracks in '{playlist_name}' (%s)" % target_listbox.size())
+        
             
     def sync_navidrome_playlists(self):
         if not self.config.get('navidrome_url'): messagebox.showerror("Error", "Please configure Navidrome in Settings."); return
