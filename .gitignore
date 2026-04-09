@@ -1,5 +1,6 @@
 local_playlists/*.m3u
 local_playlists/*.txt
+local_playlists/*.csv
 navidrome_playlists/*.m3u
 navidrome_playlists/*.txt
 __pycache__/*

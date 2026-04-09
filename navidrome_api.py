@@ -92,6 +92,7 @@ def get_all_songs_cache(config):
     song_cache = {}
     offset = 0
     PAGE_SIZE = 500
+    track_count = 0
     print('Getting all tracks')
     while True:
         album_list_res = send_api_request(
@@ -104,6 +105,7 @@ def get_all_songs_cache(config):
         albums = album_list_res['albumList2']['album']
         if isinstance(albums, dict): albums = [albums]
         for album in albums:
+            if track_count % 100 == 0: print(f"Processed {track_count} tracks so far...")
             album_detail_res = send_api_request(config['navidrome_url'], config['navidrome_user'], config['navidrome_password'], 'getAlbum', id=album['id'])
             if album_detail_res and 'album' in album_detail_res and 'song' in album_detail_res['album']:
                 songs = album_detail_res['album']['song']
@@ -112,6 +114,7 @@ def get_all_songs_cache(config):
                     if 'path' in song and 'id' in song:
                         normalized_path = song['path'].replace('\\', '/')
                         song_cache[normalized_path] = song
+                        track_count += 1
         if len(albums) < PAGE_SIZE: break
         offset += PAGE_SIZE
     return song_cache
