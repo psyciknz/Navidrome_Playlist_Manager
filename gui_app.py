@@ -443,7 +443,7 @@ class PlaylistToolApp(tk.Tk):
                 self.local_tracks_listbox.selection_set(selected_index + 1)
                 self.local_tracks_listbox.activate(selected_index + 1)
                 self.local_tracks_listbox.see(selected_index + 1)
-                self.local_tracks_listbox.event_generate("<space>")
+                #self.local_tracks_listbox.event_generate("<space>")
         elif check_item['status'] == 'ok':
             messagebox.showinfo("Accept", "This track is already OK.")
         else:
